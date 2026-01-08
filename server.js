@@ -145,6 +145,33 @@ app.post('/consulta-crf', async (req, res) => {
       validadeISO = new Date(ano, mes - 1, dia).toISOString();
     }
 
+    // Se regular, tenta capturar o PDF
+    let pdfBase64 = null;
+    if (resultado.situacao === 'REGULAR') {
+      try {
+        console.log(`[${new Date().toISOString()}] Capturando PDF do certificado...`);
+        
+        // Tenta clicar no botão de imprimir/gerar PDF
+        const btnImprimir = await page.$('input[value*="Imprimir"], button:contains("Imprimir"), a[href*="pdf"], input[value*="PDF"]');
+        if (btnImprimir) {
+          await btnImprimir.click();
+          await page.waitForTimeout(2000);
+        }
+        
+        // Gera PDF da página atual
+        const pdfBuffer = await page.pdf({
+          format: 'A4',
+          printBackground: true,
+          margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' }
+        });
+        
+        pdfBase64 = pdfBuffer.toString('base64');
+        console.log(`[${new Date().toISOString()}] PDF capturado com sucesso (${pdfBuffer.length} bytes)`);
+      } catch (pdfError) {
+        console.error(`[${new Date().toISOString()}] Erro ao capturar PDF:`, pdfError.message);
+      }
+    }
+
     res.json({
       success: true,
       situacao: resultado.situacao,
@@ -152,7 +179,8 @@ app.post('/consulta-crf', async (req, res) => {
       inscricao: resultado.inscricao,
       dataConsulta: new Date().toISOString(),
       validadeAte: validadeISO,
-      numeroCertificado: resultado.situacao === 'REGULAR' ? `CRF-${cnpjLimpo}` : null
+      numeroCertificado: resultado.situacao === 'REGULAR' ? `CRF-${cnpjLimpo}` : null,
+      pdfBase64
     });
 
   } catch (error) {
